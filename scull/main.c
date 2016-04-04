@@ -298,9 +298,11 @@ ssize_t scull_read(struct file *filp, char __user *buf, size_t count,
 	int itemsize = quantum * qset; /* how many bytes in the listitem */
 	int item, s_pos, q_pos, rest;
 	ssize_t retval = 0;
-
+	
 	if (mutex_lock_interruptible(&dev->mutex_lock))
 		return -ERESTARTSYS;
+	printk(KERN_ALERT "now in scull_read!\n");
+	printk(KERN_ALERT "Before read: dev->size:%d, *f_pos:%ld\n", dev->size, *f_pos);
 	if (*f_pos >= dev->size)
 		goto out;
 	if (*f_pos + count > dev->size)
@@ -310,24 +312,21 @@ ssize_t scull_read(struct file *filp, char __user *buf, size_t count,
 	item = (long)*f_pos / itemsize;
 	rest = (long)*f_pos % itemsize;
 	s_pos = rest / quantum; q_pos = rest % quantum;
-
 	/* follow the list up to the right position (defined elsewhere) */
 	dptr = scull_follow(dev, item);
-
+	
 	if (dptr == NULL || !dptr->data || ! dptr->data[s_pos])
 		goto out; /* don't fill holes */
-
 	/* read only up to the end of this quantum */
 	if (count > quantum - q_pos)
 		count = quantum - q_pos;
-
 	if (copy_to_user(buf, dptr->data[s_pos] + q_pos, count)) {
 		retval = -EFAULT;
 		goto out;
 	}
 	*f_pos += count;
 	retval = count;
-
+	printk(KERN_ALERT "After read: dev->size:%d, *f_pos:%ld\n", dev->size, *f_pos);
   out:
 	mutex_unlock(&dev->mutex_lock);
 	return retval;
@@ -342,6 +341,7 @@ ssize_t scull_write(struct file *filp, const char __user *buf, size_t count,
 	int itemsize = quantum * qset;
 	int item, s_pos, q_pos, rest;
 	ssize_t retval = -ENOMEM; /* value used in "goto out" statements */
+	//printk(KERN_ALERT "quantum: %d, qset: %d, itemsize: %d\n", quantum, qset, itemsize);
 
 	if (mutex_lock_interruptible(&dev->mutex_lock))
 		return -ERESTARTSYS;
@@ -350,7 +350,11 @@ ssize_t scull_write(struct file *filp, const char __user *buf, size_t count,
 	item = (long)*f_pos / itemsize;
 	rest = (long)*f_pos % itemsize;
 	s_pos = rest / quantum; q_pos = rest % quantum;
-
+	
+	//printk(KERN_ALERT "%s length:%d offset:%ld is stored as below:\n", buf, count, *f_pos);	
+	//printk(KERN_ALERT "the %dth listitem,the %dth qset, the %dth quantum\n", item, s_pos, q_pos);
+	printk(KERN_ALERT "now in scull_write!\n");
+	printk(KERN_ALERT "Before write: dev->size:%d, *f_pos:%ld\n", dev->size, *f_pos);
 	/* follow the list up to the right position */
 	dptr = scull_follow(dev, item);
 	if (dptr == NULL)
@@ -376,10 +380,11 @@ ssize_t scull_write(struct file *filp, const char __user *buf, size_t count,
 	}
 	*f_pos += count;
 	retval = count;
-
+	
         /* update the size */
 	if (dev->size < *f_pos)
 		dev->size = *f_pos;
+	printk(KERN_ALERT "After write: dev->size:%d, *f_pos:%ld\n", dev->size, *f_pos);
 
   out:
 	mutex_unlock(&dev->mutex_lock);
